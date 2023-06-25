@@ -1,7 +1,7 @@
 - 👋 Hi, I’m @aryansid
 - 👀 I’m interested in machine learning & tech entrepreneurship  
-- 🌱 I’m currently exploring blockchain technology 
-- 💞️ I’m looking to collaborate on AI & web3 projects
+- 🌱 I’m currently exploring llms + hardware
+- 💞️ I’m looking to collaborate on AI projects
 - 📫 Want to get into touch? Send me a request on Linkedin https://www.linkedin.com/in/aryan-siddiqui-3b70a31a0
 
 <!---
