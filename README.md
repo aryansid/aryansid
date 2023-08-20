@@ -1,8 +1,4 @@
-- 👋 Hi, I’m @aryansid
-- 👀 I’m interested in machine learning & tech entrepreneurship  
-- 🌱 I’m currently exploring llms + hardware
-- 💞️ I’m looking to collaborate on AI projects
-- 📫 Want to get into touch? Send me a request on Linkedin https://www.linkedin.com/in/aryan-siddiqui-3b70a31a0
+![Anurag's GitHub stats](https://github-readme-stats.vercel.app/api?username=aryansid&show_icons=true&theme=radical)
 
 <!---
 aryansid/aryansid is a ✨ special ✨ repository because its `README.md` (this file) appears on your GitHub profile.
