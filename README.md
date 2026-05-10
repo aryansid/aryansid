@@ -17,7 +17,7 @@
 <div align="center">
 
   <a href="https://github.com/aryansid">
-    <img src="https://readme-typing-svg.demolab.com?font=VT323&weight=400&size=32&duration=2800&pause=900&color=00F0FF&center=true&vCenter=true&width=820&lines=%3E+RESEARCHING+LONG-HORIZON+AGENTS+%40+STANFORD+AI+LAB;%3E+USING+RL+TO+TEACH+MODELS+STRATEGIC%2C+OPEN-ENDED+REASONING;%3E+INVESTIGATING+LLM+VISUAL+CAPABILITIES;%3E+INSERT+COIN+TO+CONTINUE_" alt="typing"/>
+    <img src="https://readme-typing-svg.demolab.com?font=VT323&weight=400&size=32&duration=2800&pause=900&color=00F0FF&center=true&vCenter=true&width=820&lines=%3E+RESEARCHING+LONG-HORIZON+AGENTS+%40+STANFORD+AI+LAB;%3E+USING+RL+TO+TEACH+MODELS+STRATEGIC%2C+OPEN-ENDED+REASONING;%3E+INVESTIGATING+LLM+VISUAL+CAPABILITIES" alt="typing"/>
   </a>
 
 </div>
@@ -76,8 +76,6 @@
 
 <!-- ▓▓▓ ARCADE FOOTER ▓▓▓ -->
 <div align="center">
-
-  <sub><code>>> PRESS START TO CONTINUE_</code></sub>
 
   <img src="https://capsule-render.vercel.app/api?type=waving&color=0:00f0ff,50:b026ff,100:ff2e88&height=120&section=footer" alt="footer"/>
 </div>
