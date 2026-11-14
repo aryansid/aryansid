@@ -1,27 +1,31 @@
-name: Generate Snake
+name: Build level
 
 on:
   schedule:
-    # Runs every 6 hours so the snake stays fresh
-    - cron: "0 */6 * * *"
+    # Every 4 hours so the level tracks new contributions
+    - cron: "0 */4 * * *"
   workflow_dispatch:
   push:
     branches:
       - main
 
 jobs:
-  generate:
+  build:
     permissions:
       contents: write
     runs-on: ubuntu-latest
     steps:
-      - name: Generate the snake
-        uses: Platane/snk@v3
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
         with:
-          github_user_name: aryansid
-          outputs: |
-            dist/github-snake.svg
-            dist/github-snake-dark.svg?palette=github-dark
+          node-version: 20
+
+      - name: Build day and night levels
+        run: node level/generate.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_USER: aryansid
 
       - name: Push to output branch
         uses: crazy-max/ghaction-github-pages@v3.1.0
