@@ -51,7 +51,7 @@ const ser = n => `<${n.tag}${Object.entries(n.attrs).map(([k, v]) => ` ${k}="${e
 
 function build(themeName){
   const W = 1200, H = 440, X0 = 72, P = 20, GROUND = 416, MAX_ROWS = 11;
-  const VX = 100, G = 0.18, PX = 2, HOLD0 = 0.8, HOLD1 = 3.4, HOP = 0.42;
+  const PX = 2, HOLD0 = 0.8, HOLD1 = 3.4, HOP = 0.42;
 
   const counts = weeks.map(w => w.count);
   const maxWeek = Math.max(1, ...counts);
@@ -96,53 +96,111 @@ function build(themeName){
     return out;
   }
 
-  // ---------- physics: y as a function of x (constant run speed) ----------
-  const pieces = [], landings = [];
-  const flat = (x0, x1, y) => { if (x1 > x0) pieces.push({x0, x1, air: false, y: () => y}); };
-  function parabFn(x0, y0, x1, y1, apexY){
-    const r = Math.sqrt((y0 - apexY) / (y1 - apexY));
-    const xv = (x0 + r * x1) / (1 + r), k = (y0 - apexY) / ((x0 - xv) ** 2);
-    return X => apexY + k * (X - xv) ** 2;
-  }
-  const parab = (x0, y0, x1, y1, apexY) => pieces.push({x0, x1, air: true, y: parabFn(x0, y0, x1, y1, apexY)});
+  // ---------- physics: one gravity for every arc, steady run speed, air control ----------
+  // Units are SVG units (a tile is 20) and seconds.
+  const GRAV = 3000;        // same gravity for hops, drops, pit jumps and the victory hop
+  const VX = 100;           // run speed
+  const ACC_T = .25;        // time to reach run speed from standing
+  const STOP_D = 10;        // braking distance into the flag
+  const APEX_MAX = 60;      // highest a pit jump may arc above its takeoff; longer pits sprint instead
+  const HOP_MARGIN = 10;    // how far a step-up clears the step it lands on
+  const MIN_POSE = .12;     // airtime below this keeps the run cycle (no flicker on tiny drops)
+  const HALF = 7;           // half the hero's body width, for terrain collision
 
   const land = []; heights.forEach((h, i) => { if (h > 0) land.push(i); });
-  let x = cx(land[0]);
+  const lastLand = land[land.length - 1];
+  const stopX = cx(lastLand);                             // where the hero stands at the flag
+  // landings keep the whole body on the block: [lo, hi] for the hero's center
+  // (if the next column is taller, land at the near edge to leave run-up for the next hop)
+  const lo = b => xs(b) + HALF;
+  const hi = b => b === lastLand ? stopX : (heights[b + 1] > heights[b] ? lo(b) : xs(b) + P - HALF);
+  const segs = [];                                        // {dur, at(t) -> [x, y], air}
+  let x = cx(land[0]), y = top(land[0]);
+
+  const runTo = x1 => {
+    if (x1 <= x) return;
+    const x0 = x, yy = y;
+    segs.push({dur: (x1 - x0) / VX, at: t => [x0 + VX * t, yy], air: false});
+    x = x1;
+  };
+  // ballistic arc from (x, y) to (x1, y1) taking dur seconds, under GRAV
+  // body overlaps a column below its top?
+  const clips = (px, py) => {
+    for (let i = Math.floor((px - HALF + .01 - X0) / P); i <= Math.floor((px + HALF - .01 - X0) / P); i++)
+      if (i >= 0 && i < N && heights[i] && py > top(i) + 1) return true;
+    return false;
+  };
+  const arc = (x0, y0, x1, y1, dur) => {
+    const vx = (x1 - x0) / dur, vy = (y0 - y1 + GRAV * dur * dur / 2) / dur;
+    return t => [x0 + vx * t, y0 - vy * t + GRAV * t * t / 2];
+  };
+  // jump to (x1, y1); if the arc would clip a wall, hang a little longer (more height, same gravity)
+  const jumpTo = (x1, y1, dur) => {
+    let d = dur, at = arc(x, y, x1, y1, d);
+    const blocked = f => { for (let t = 0; t <= d; t += 1 / 240){ const [px, py] = f(t); if (clips(px, py)) return true; } return false; };
+    while (d < 1.2 && blocked(at)){ d += .01; at = arc(x, y, x1, y1, d); }
+    segs.push({dur: d, at, air: true});
+    x = x1; y = y1;
+  };
+
+  // ease from standing to run speed
+  { const x0 = x, yy = y; segs.push({dur: ACC_T, at: t => [x0 + VX * t * t / (2 * ACC_T), yy], air: false}); x += VX * ACC_T / 2; }
+
   for (let j = 1; j < land.length; j++){
     const a = land[j - 1], b = land[j], ya = top(a), yb = top(b);
-    if (b === a + 1 && ya === yb){ flat(x, cx(b), ya); x = cx(b); }
-    else if (b === a + 1 && yb < ya){
-      const xt = Math.max(x, xs(a) + 4); flat(x, xt, ya);
-      const xl = Math.max(xs(b) + (b === LAST ? 4 : 8), xt + 18);
-      parab(xt, ya, xl, yb, yb - 24); x = xl;
+    if (b === a + 1 && ya === yb){ runTo(cx(b)); continue; }
+    if (b === a + 1 && yb < ya){
+      // hop up: rise to HOP_MARGIN above the step, come down onto it; take off early enough to land on it
+      const dur = Math.sqrt(2 * (ya - yb + HOP_MARGIN) / GRAV) + Math.sqrt(2 * HOP_MARGIN / GRAV);
+      const xt = Math.max(x, lo(b) - VX * dur);
+      runTo(xt);
+      jumpTo(Math.min(Math.max(xt + VX * dur, lo(b)), hi(b)), yb, dur);
     } else if (b === a + 1){
-      const xe = Math.max(x, xs(a) + P + 1); flat(x, xe, ya);
-      const xl = xe + Math.sqrt((yb - ya) / G);
-      pieces.push({x0: xe, x1: xl, air: true, y: X => ya + G * (X - xe) ** 2});
-      if (yb - ya >= 40) landings.push({x: xl, y: yb});
-      x = xl;
+      // run off the ledge and fall; steer in the air so the landing stays on the block
+      runTo(Math.max(x, xs(a) + P + HALF));               // step off once the body clears the edge
+      const dur = Math.sqrt(2 * (yb - ya) / GRAV);
+      jumpTo(Math.max(Math.min(x + VX * dur, hi(b)), x + 1), yb, dur);
     } else {
-      const xt = Math.max(x, xs(a) + P - 6); flat(x, xt, ya);
-      const xl = Math.max(xs(b) + 8, xt + 24);
-      parab(xt, ya, xl, yb, Math.min(ya, yb) - 34 - (b - a - 2) * 6);
-      landings.push({x: xl, y: yb}); x = xl;
+      // pit: jump from the edge; if the gap is too long to clear at run speed under APEX_MAX, sprint
+      runTo(Math.max(x, xs(a) + P - HALF));
+      const xl = Math.max(lo(b), x + 1);
+      let dur = (xl - x) / VX;
+      const vy = (y - yb + GRAV * dur * dur / 2) / dur;
+      const apex = Math.max(APEX_MAX, y - yb + HOP_MARGIN);
+      if (vy * vy / (2 * GRAV) > apex){
+        const vyMax = Math.sqrt(2 * GRAV * apex);
+        dur = vyMax / GRAV + Math.sqrt(2 * (yb - (y - apex)) / GRAV);
+      }
+      jumpTo(xl, yb, dur);
     }
   }
-  const lastLand = land[land.length - 1];
-  const XS = cx(land[0]), XE = Math.max(x, xs(lastLand) + 4), YE = top(lastLand);
-  flat(x, XE, YE);
-
-  const samples = []; let pi = 0;
-  for (let X = XS; X < XE; X += 2.5){
-    while (pi < pieces.length - 1 && X > pieces[pi].x1) pi++;
-    const p = pieces[pi];
-    samples.push({x: X, y: p.y(Math.min(Math.max(X, p.x0), p.x1)), air: p.air && X > p.x0 && X < p.x1});
+  // brake into the flag
+  runTo(Math.max(x, stopX - STOP_D));
+  if (stopX > x){
+    const x0 = x, yy = y, dur = 2 * (stopX - x0) / VX;
+    segs.push({dur, at: t => [x0 + VX * t - VX * t * t / (2 * dur), yy], air: false});
+    x = stopX;
   }
-  samples.push({x: XE, y: YE, air: false});
+  const XS = segs[0].at(0)[0], XE = x, YE = y;
 
-  const RUN = Math.max(XE - XS, 1) / VX, T = HOLD0 + RUN + HOLD1;
+  const RUN = segs.reduce((s, g) => s + g.dur, 0), T = HOLD0 + RUN + HOLD1;
   const tS = HOLD0 / T, tE = (HOLD0 + RUN) / T, tH = tE + HOP / T;
-  const tAt = X => tS + (X - XS) / Math.max(XE - XS, 1) * (tE - tS);
+
+  // sample at 60 fps
+  const samples = [], landings = [];
+  let clock = 0;
+  for (const sg of segs){
+    const pose = sg.air && sg.dur >= MIN_POSE;
+    for (let t = 0; t < sg.dur; t += 1 / 60){ const [sx, sy] = sg.at(t); samples.push({t: (HOLD0 + clock + t) / T, x: sx, y: sy, air: pose}); }
+    clock += sg.dur;
+    if (sg.air && sg.dur > .2){ const [lx, ly] = sg.at(sg.dur); landings.push({x: lx, y: ly, t: (HOLD0 + clock) / T}); }
+  }
+  samples.push({t: tE, x: XE, y: YE, air: false});
+  const tAt = X => { const s = samples.find(s => s.x >= X); return s ? s.t : tE; };
+
+  // self-check: feet never sink into a column under the hero's body
+  const sunk = samples.filter(s => clips(s.x, s.y - 1));
+  if (sunk.length) console.warn(`physics: ${sunk.length} samples clip into terrain`, process.env.DEBUG ? sunk.map(s => `${Math.floor((s.x - X0) / P)}:${s.air ? "air" : "gnd"}:${(s.y).toFixed(0)}`).join(" ") : "");
   const loop = {dur: T.toFixed(3) + "s", repeatCount: "indefinite"};
   const anim = (parent, attr, values, times, mode) => el("animate", Object.assign({attributeName: attr, values: values.join(";"), keyTimes: times.map(f5).join(";"), calcMode: mode || "linear"}, loop), parent);
   const animT = (parent, values, times) => el("animateTransform", Object.assign({attributeName: "transform", type: "translate", values: values.join(";"), keyTimes: times.map(f5).join(";")}, loop), parent);
@@ -264,10 +322,11 @@ svg{${THEMES[themeName]}--pixel:"PS2P",monospace}
   });
 
   // goal flag at the latest week
-  const poleX = xs(lastLand) + P - 3, poleTop = YE - 66;
+  // the pole stands on the ground just past the latest column, so the hero lands clear of it
+  const poleX = xs(lastLand) + P + 6, poleTop = YE - 66;
   const goal = el("g", {class: "px"}, root);
-  el("rect", {x: poleX - 1.5, y: poleTop, width: 3, height: YE - poleTop, fill: "var(--pole)"}, goal);
-  el("rect", {x: poleX + .5, y: poleTop, width: 1, height: YE - poleTop, fill: "var(--pole-dk)"}, goal);
+  el("rect", {x: poleX - 1.5, y: poleTop, width: 3, height: GROUND - poleTop, fill: "var(--pole)"}, goal);
+  el("rect", {x: poleX + .5, y: poleTop, width: 1, height: GROUND - poleTop, fill: "var(--pole-dk)"}, goal);
   pix([".oo.", "oWWo", "oWwo", ".oo."], {o: "#1b1222", W: "#ffffff", w: "#c9cfdb"}, goal, 2, poleX - 4, poleTop - 8);
   const flagG = el("g", {}, goal);
   pix(["RRRR........", "RRRRRRR.....", "RRWWRRRRRR..", "RWWWWRRRRRRR", "rWWWWrrrrrrr", "rrWWrrrrrr..", "rrrrrrr.....", "rrrr........"],
@@ -279,7 +338,7 @@ svg{${THEMES[themeName]}--pixel:"PS2P",monospace}
   // landing puffs
   const puffs = el("g", {}, root);
   landings.forEach(l => {
-    const tl = tAt(l.x);
+    const tl = l.t;
     [[-1, -14], [1, 4]].forEach(([dir, ox]) => {
       const w = el("g", {}, puffs);
       const p = pix([".WW.", "WWWW", ".WW."], {W: "#ffffff"}, w, 1.5, l.x + ox, l.y - 5, {opacity: 0});
@@ -312,13 +371,15 @@ svg{${THEMES[themeName]}--pixel:"PS2P",monospace}
 
   const changes = [{t: 0, s: "idle"}];
   const push = (t, s) => { const last = changes[changes.length - 1]; if (last.s === s) return; if (Math.abs(last.t - t) < 1e-6) last.s = s; else changes.push({t, s}); };
-  samples.forEach(sm => push(tAt(sm.x), sm.air ? "air" : "run"));
+  samples.forEach(sm => push(sm.t, sm.air ? "air" : "run"));
   push(tE, "air"); push(tH, "idle");
   [["idle", idleG], ["run", runG], ["air", jumpG]].forEach(([name, g]) => anim(g, "opacity", changes.map(c => c.s === name ? 1 : 0), changes.map(c => c.t), "discrete"));
 
   const mv = [[samples[0].x, samples[0].y]], mt = [0];
-  samples.forEach(s => { mv.push([s.x, s.y]); mt.push(tAt(s.x)); });
-  for (let k = 1; k <= 8; k++){ const u = k / 8; mv.push([XE, YE - 64 * u * (1 - u)]); mt.push(tE + u * HOP / T); }
+  samples.forEach(s => { if (s.t > mt[mt.length - 1]){ mv.push([s.x, s.y]); mt.push(s.t); } });
+  // victory hop under the same gravity
+  const hopVy = GRAV * HOP / 2;
+  for (let k = 1; k <= 24; k++){ const tt = k / 24 * HOP; mv.push([XE, YE - hopVy * tt + GRAV * tt * tt / 2]); mt.push(tE + tt / T); }
   mv.push([XE, YE]); mt.push(1);
   hero.attrs.transform = `translate(${r1(mv[0][0])} ${r1(mv[0][1])})`;
   el("animateMotion", Object.assign({values: mv.map(p => r1(p[0] - mv[0][0]) + "," + r1(p[1] - mv[0][1])).join(";"), keyTimes: mt.map(f5).join(";"), calcMode: "linear"}, loop), hero);
@@ -363,9 +424,40 @@ svg{${THEMES[themeName]}--pixel:"PS2P",monospace}
   return ser(svg);
 }
 
+// ---------- bio card: the README text, set in Space Mono (GitHub can't change README fonts) ----------
+const MONO = ["Regular", "Bold"].map(w => readFileSync(new URL(`SpaceMono-${w}-latin.woff2`, HERE)).toString("base64"));
+const BIO = [
+  // each paragraph: lines of [text, bold?] runs
+  [[["I research agents and reinforcement learning to build real-world"]],
+   [["evaluations at the "], ["Stanford AI Lab", 1], [", under "], ["John Yang", 1], [" (SWE-bench)."]]],
+  [[["I also love to build consumer products that feel like "], ["magic", 1], ["."]]]
+];
+function buildBio(theme){
+  const fg = theme === "night" ? "#e6edf3" : "#1f2328";
+  const COIN = [".oooo.", "oYYYyo", "oYWYyo", "oYWYyo", "oYWYyo", "oYWYyo", "oYYyyo", ".oooo."];
+  const C = {o: "#3a2408", Y: "#ffcf3f", y: "#e08d1a", W: "#fff6cc"};
+  const coin = (x, y) => COIN.flatMap((row, r) => [...row].map((ch, c) => ch === "." ? "" : `<rect x="${x + c * 2.5}" y="${y + r * 2.5}" width="2.5" height="2.5" fill="${C[ch]}"/>`)).join("");
+  let body = "", y = 34;
+  BIO.forEach(par => {
+    body += coin(2, y - 18);
+    par.forEach(line => {
+      body += `<text x="36" y="${y}">${line.map(([t, b]) => b ? `<tspan font-weight="700">${esc(t)}</tspan>` : esc(t)).join("")}</text>`;
+      y += 36;
+    });
+    y += 18;
+  });
+  const h = y - 36 - 18 + 14;
+  const alt = BIO.map(p => p.map(l => l.map(r => r[0]).join("")).join(" ")).join(" ");
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 ${h}" width="1200" height="${h}" role="img" aria-label="${esc(alt)}">` +
+    `<style>@font-face{font-family:"SM";src:url(data:font/woff2;base64,${MONO[0]}) format("woff2");font-weight:400}` +
+    `@font-face{font-family:"SM";src:url(data:font/woff2;base64,${MONO[1]}) format("woff2");font-weight:700}` +
+    `text{font:400 24px "SM",ui-monospace,monospace;fill:${fg}}rect{shape-rendering:crispEdges}</style>${body}</svg>`;
+}
+
 mkdirSync("dist", {recursive: true});
 for (const theme of ["day", "night"]){
   const out = build(theme);
   writeFileSync(`dist/${theme}.svg`, out);
   console.log(`dist/${theme}.svg ${(out.length / 1024).toFixed(0)} KB`);
+  writeFileSync(`dist/bio-${theme}.svg`, buildBio(theme));
 }

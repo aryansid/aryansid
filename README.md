@@ -3,10 +3,14 @@
   <img alt="A year of my GitHub contributions as a platformer level" src="https://raw.githubusercontent.com/aryansid/aryansid/output/day.svg" width="100%">
 </picture>
 
-I train agents with reinforcement learning to climb game arenas at the Stanford AI Lab, under John Yang (SWE-bench). Current research: [CodeClash](https://codeclash.ai/).
+<br>
+<br>
 
-I also build consumer products that should feel like magic.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/aryansid/aryansid/output/bio-night.svg">
+  <img alt="I research agents and reinforcement learning to build real-world evaluations at the Stanford AI Lab, under John Yang (SWE-bench). I also love to build consumer products that feel like magic." src="https://raw.githubusercontent.com/aryansid/aryansid/output/bio-day.svg" width="100%">
+</picture>
 
-<sub>The level is my last year of contributions. Every few hours an agent tries to clear it.</sub>
+<br>
 
-[x.com/Ar_boian](https://x.com/Ar_boian)
+Current research: [CodeClash](https://codeclash.ai/) &nbsp;·&nbsp; [x.com/Ar_boian](https://x.com/Ar_boian)
