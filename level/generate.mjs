@@ -437,7 +437,8 @@ function buildBio(theme){
   const COIN = [".oooo.", "oYYYyo", "oYWYyo", "oYWYyo", "oYWYyo", "oYWYyo", "oYYyyo", ".oooo."];
   const C = {o: "#3a2408", Y: "#ffcf3f", y: "#e08d1a", W: "#fff6cc"};
   const coin = (x, y) => COIN.flatMap((row, r) => [...row].map((ch, c) => ch === "." ? "" : `<rect x="${x + c * 2.5}" y="${y + r * 2.5}" width="2.5" height="2.5" fill="${C[ch]}"/>`)).join("");
-  let body = "", y = 34;
+  const PAD_TOP = 40, PAD_BOTTOM = 36;          // breathing room; GitHub strips <br> spacing
+  let body = "", y = PAD_TOP + 24;
   BIO.forEach(par => {
     body += coin(2, y - 18);
     par.forEach(line => {
@@ -446,7 +447,7 @@ function buildBio(theme){
     });
     y += 18;
   });
-  const h = y - 36 - 18 + 14;
+  const h = y - 36 - 18 + 10 + PAD_BOTTOM;
   const alt = BIO.map(p => p.map(l => l.map(r => r[0]).join("")).join(" ")).join(" ");
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 ${h}" width="1200" height="${h}" role="img" aria-label="${esc(alt)}">` +
     `<style>@font-face{font-family:"SM";src:url(data:font/woff2;base64,${MONO[0]}) format("woff2");font-weight:400}` +
